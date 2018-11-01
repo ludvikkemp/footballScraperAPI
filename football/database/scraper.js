@@ -155,4 +155,4 @@ const scrapePlayers = () => {
   }, 50000);
 };
 
-scrapeLeagues();
+//scrapeLeagues();

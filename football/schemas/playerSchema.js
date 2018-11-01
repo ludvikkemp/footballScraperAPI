@@ -10,13 +10,12 @@ module.exports = new Schema({
     type: String,
     required: true
   },
-  href: {
+  url: {
     type: String,
     required: true
   },
-  league: {
+  team: {
     transfermarktId: { type: String, required: true },
-    title: { type: String, required: true },
-    nation: { type: String, required: true }
+    name: { type: String, required: true }
   }
 });
