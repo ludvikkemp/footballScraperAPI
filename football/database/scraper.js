@@ -57,7 +57,6 @@ class Scraper extends cheerio {
             }
           });
         }
-        connection.close();
         console.log('Successfully saved leagues to database!');
         this.properties.leaguesScraped = true;
       }
