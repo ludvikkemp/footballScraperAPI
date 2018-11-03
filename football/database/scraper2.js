@@ -1,23 +1,33 @@
-const cheerio = require('cheerio');
+const cheerio = require('cheerio'),
+  cheerioTableparser = require('cheerio-Tableparser');
 const axios = require('axios');
 const chalk = require('chalk');
 const { League, Team, Player, connection } = require('./db');
 const scrapeInfo = require('./scrape.config');
 
 // Global Variables
-const europeURL = 'https://www.transfermarkt.com/wettbewerbe/europa';
-const mainURL = 'https://www.transfermarkt.com';
+const europeUrl = 'https://www.transfermarkt.com/wettbewerbe/europa';
+const mainUrl = 'https://www.transfermarkt.com';
 let leagues = [];
 let teams = [];
 let players = [];
 
-const scrapeLeagues = async url => {
+const scrape = async () => {
   console.log(
     chalk.yellow.bgBlue(
       `\n  Scraping of ${chalk.underline.bold('Leagues')} initiated...\n`
     )
   );
+  try {
+    //await scrapeLeagues(europeUrl);
+    //await scrapeLeaguesUrls();
+    await scrapeLeaguesStandings();
+  } catch (error) {
+    console.log(error);
+  }
+};
 
+const scrapeLeagues = async url => {
   try {
     const response = await axios.get(url);
     const $ = cheerio.load(response.data);
@@ -25,132 +35,123 @@ const scrapeLeagues = async url => {
     // Scraping League Names
     const leagueNames = $('.responsive-table .items tbody .hauptlink tr a')
       .toArray()
-      .filter((elem, i) => i % 2 !== 0);
+      .filter((e, i) => i % 2 !== 0);
 
     // Scraping League Nations
     const leagueNations = $(
       '.responsive-table .items tbody .zentriert img'
     ).toArray();
 
-    // Saving each leagueSchema
+    // Creating All League Instances and Pushing into Array
     for (let i = 0; i < leagueNames.length; i++) {
-      // New League Schema Created
-      const leagueInstance = new League({
+      const leagueInstance = {
         transfermarktId: leagueNames[i].attribs.href.split('/', 7)[4],
         title: leagueNames[i].attribs.title,
         nation: leagueNations[i].attribs.title,
-        href: leagueNames[i].attribs.href
-      });
-      leagues.push(leagueInstance);
-      // League Schema Saved into Database
-      leagueInstance.save(err => {
-        if (err) {
-          throw new Error(err);
+        urls: {
+          main: leagueNames[i].attribs.href,
+          marketValue: null,
+          gamePlan: null,
+          standings: null,
+          topGoalScorers: null
         }
-      });
+      };
+      leagues.push(leagueInstance);
     }
-    console.log('Leagues Successfully Scraped and Saved into Database!\n\n');
-    scrapeTeams();
   } catch (error) {
     console.error(error);
   }
 };
 
-const scrapeTeams = async url => {
-  console.log('---------- STARING SCRAPING TEAMS ----------\n');
+const scrapeLeaguesUrls = async () => {
+  console.log('---------- STARING LEAGUES URLS SCRAPING ----------');
+
   for (let i = 0; i < leagues.length; i++) {
     try {
-      const response = await axios.get(url);
+      console.log(
+        chalk.black.bgYellow(
+          `\n\n  Scraping  ${chalk.underline.bold(leagues[i].title)} URLs\n`
+        )
+      );
+      const response = await axios.get(mainUrl + leagues[i].urls.main);
       const $ = cheerio.load(response.data);
 
-      const data = $(
-        '.responsive-table .items tbody .zentriert .vereinprofil_tooltip'
-      ).toArray();
+      const data1 = $('.footer-links a[href]').each((i, elem) => {
+        return $(elem).attr('href');
+      });
 
-      const teamNames = $(
-        '.responsive-table .items tbody .hauptlink .vereinprofil_tooltip'
-      )
-        .map(function(i, elem) {
-          return $(this).text();
-        })
-        .get()
-        .join(', ')
-        .split(', ')
-        .filter((elem, i) => i % 2 === 0);
+      const data2 = $('.table-footer a[href]').each((i, elem) => {
+        return $(elem).attr('href');
+      });
 
-      //TODO Her ætti ég að get náð í annað response await um liðin
-      // More info
-
-      for (let j = 0; j < data.length; j++) {
-        console.log('...Adding ' + teamNames[j]);
-        const teamInstance = new Team({
-          transfermarktId: data[j].attribs.href.split('/', 7)[4],
-          name: teamNames[j],
-          href: data[j].attribs.href,
-          league: {
-            transfermarktId: leagues[i].transfermarktId,
-            title: leagues[i].title,
-            nation: leagues[i].nation
-          }
-        });
-        teams.push(teamInstance);
-        teamInstance.save(err => {
-          if (err) {
-            throw new Error(err);
-          }
-        });
-      }
+      leagues[i].urls.gamePlan = data1[1].attribs.href;
+      leagues[i].urls.marketValue = data2[0].attribs.href;
+      leagues[i].urls.topGoalScorers = data2[1].attribs.href;
+      leagues[i].urls.standings = data2[2].attribs.href;
     } catch (error) {
       console.error(error);
     }
   }
-  setTimeout(() => {
-    console.log('\nTeams Successfully Scraped and Saved into Database!\n\n');
-    scrapePlayers();
-  }, 10000);
 };
 
-const scrapePlayers = () => {
+const scrapeLeaguesStandings = async () => {
+  console.log('---------- STARING LEAGUES STANDINGS SCRAPING ----------');
+
+  // TEST CODE !!
+  const response = await axios.get(
+    'https://www.transfermarkt.com/premier-league/tabelle/wettbewerb/GB1/saison_id/2018'
+  );
+  const $ = cheerio.load(response.data);
+
+  cheerioTableparser($);
+  var data = $('table').parsetable(true, true, true);
+  console.log(data);
+  /*
+  for (let i = 0; i < leagues.length; i++) {
+    try {
+      console.log(
+        chalk.black.bgGreen(
+          `\n\n  Scraping  ${chalk.underline.bold(
+            leagues[i].title
+          )} Table Standings\n`
+        )
+      );
+
+      const response = await axios.get(mainUrl + leagues[i].urls.standings);
+      const $ = cheerio.load(response.data);
+
+      cheerioTableparser($);
+      var data = $('table').parsetable(true, true, true);
+      console.log(data);
+    } catch (error) {
+      console.log(error);
+    }
+  }
+  */
+};
+
+const scrapePlayers = async () => {
   console.log('---------- STARING SCRAPING PLAYERS ----------\n');
 
   for (let i = 0; i < teams.length; i++) {
-    request(
-      {
-        url: mainURL + teams[i].href,
-        form: scrapeInfo.form(),
-        headers: scrapeInfo.headers()
-      },
-      (err, res, body) => {
-        const $ = cheerio.load(body);
-        const data = $('span.hide-for-small a.spielprofil_tooltip').toArray();
+    const response = await axios.get(mainUrl + teams[i].href);
+    const $ = cheerio.load(response.data);
+    const data = $('span.hide-for-small a.spielprofil_tooltip').toArray();
 
-        for (let j = 0; j < data.length; j++) {
-          console.log('...Adding ' + data[j].attribs.title);
-          const playerInstance = new Player({
-            transfermarktId: data[j].attribs.id,
-            name: data[j].attribs.title,
-            url: data[j].attribs.href,
-            team: {
-              transfermarktId: teams[i].transfermarktId,
-              name: teams[i].name
-            }
-          });
-          players.push(playerInstance);
-          playerInstance.save(err => {
-            if (err) {
-              throw new Error(err);
-            }
-          });
+    for (let j = 0; j < data.length; j++) {
+      console.log('...Adding ' + data[j].attribs.title);
+      const playerInstance = new Player({
+        transfermarktId: data[j].attribs.id,
+        name: data[j].attribs.title,
+        url: data[j].attribs.href,
+        team: {
+          transfermarktId: teams[i].transfermarktId,
+          name: teams[i].name
         }
-      }
-    );
+      });
+      players.push(playerInstance);
+    }
   }
-  setTimeout(() => {
-    console.log('\nPlayers Successfully Scraped and Saved into Database\n\n');
-    console.log(
-      'Mongo Database for football players and teams in 25 leagues in Europe'
-    );
-  }, 50000);
 };
 
-//scrapeLeagues();
+scrape();
